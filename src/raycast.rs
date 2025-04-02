@@ -163,6 +163,9 @@ pub fn raycast2<'a>(start: Vec2, dir: Vec2, chunk_data: &'a Quadtree) -> Option<
     return proc_subtree(start,dir,mask,node,tx0,ty0,tx1,ty1);
 
     fn proc_subtree(start: Vec2, dir: Vec2, mask: u8,node: &QuadtreeNode,tx0:f32,ty0:f32,tx1:f32,ty1:f32) -> Option<(&QuadtreeNode,f32)> {
+        if !( tx1 >= 0. && ty1 >= 0. ) {
+            return None;
+        }
         if node.children.is_none() {
             if node.is_full && ( tx1 >= 0. && ty1 >= 0. ) {
                 if tx0 < 0. && ty0 < 0. {
