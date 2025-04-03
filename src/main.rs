@@ -1,6 +1,8 @@
 mod graphics;
 mod quadtree;
+mod quadtree_arr;
 mod raycast;
+mod raycast_arr;
 
 use my_math::prelude::*;
 use minifb::MouseMode;
@@ -9,8 +11,11 @@ use minifb::MouseMode;
 extern crate my_math;
 
 use graphics::*;
-use quadtree::*;
-use raycast::*;
+
+//use quadtree::*;
+//use raycast::*;
+use quadtree_arr::*;
+use raycast_arr::*;
 
 use std::time::Instant;
 use std::env;
@@ -19,7 +24,7 @@ const BG_COL: u32 = (51 << 16) + (76 << 8) + 76;
 
 static mut RES: i32 = 720;
 static mut TREE_RES:i32 = unsafe { RES * 9/10 };
-static mut HEIGHT: i32 = 1 << 6;
+static mut HEIGHT: i32 = 1 << 5;
 static mut CELL_SIZE: i32 = unsafe { TREE_RES/HEIGHT };
 
 fn from_cell(pos:i32) -> i32 {
@@ -83,9 +88,9 @@ fn main() {
     let (full,multi_hit) = parse_args();
     let mut quadtree;
     if full {
-        quadtree = unsafe { quadtree::Quadtree::new_full(HEIGHT,ivec2!(0,0)) };
+        quadtree = unsafe { Quadtree::new_full(HEIGHT,ivec2!(0,0)) };
     } else {
-        quadtree = unsafe { quadtree::Quadtree::new(HEIGHT,ivec2!(0,0)) };
+        quadtree = unsafe { Quadtree::new(HEIGHT,ivec2!(0,0)) };
     }
 
     let mut app = unsafe { App::new("raycast", RES, RES) };
@@ -93,6 +98,16 @@ fn main() {
     let mut target_y = unsafe { RES as f32/2. - 1e-5 };
 
     'draw_loop: while app.window.is_open() {
+        for (i,node) in quadtree.nodes.iter().enumerate() {
+            print!("{} ",if node.is_orphan { 1 } else { 0 });
+            if i % 4 == 0 {
+                print!("|");
+            }
+            if i % unsafe {HEIGHT} as usize == 0 {
+                println!();
+            }
+        }
+        println!();
         let fb = &mut app.framebuffer;
 
         fb.clear(BG_COL);
@@ -109,30 +124,30 @@ fn main() {
             let ray_dir = Vec2{ x: cell_target_x - cell_mouse_x, 
                                 y: cell_target_y - cell_mouse_y }.norm();
 
-            let start = Instant::now();
-            for _ in 0..1000 {
-                dda_quad(ray_origin,ray_dir,1000.,&quadtree);
-            }
-            println!("dda   {:?}",start.elapsed());
-
-            let start = Instant::now();
-            for _ in 0..1000 {
-                raycast2(ray_origin,ray_dir,&quadtree);
-            }
-            println!("param {:?}",start.elapsed());
+            //let start = Instant::now();
+            //for _ in 0..1000 {
+                //dda_quad(ray_origin,ray_dir,1000.,&quadtree);
+            //}
+            //println!("dda   {:?}",start.elapsed());
+//
+            //let start = Instant::now();
+            //for _ in 0..1000 {
+                //raycast2(ray_origin,ray_dir,&quadtree);
+            //}
+            //println!("param {:?}",start.elapsed());
 
 
             if multi_hit {
-                let collitions = raycast(ray_origin,ray_dir,&quadtree);
+                //let collitions = raycast(ray_origin,ray_dir,&quadtree);
 
-                for (i,node) in collitions.iter().enumerate() {
-                    let red = Color { col: 0x00FF0000 };
-                    let blue = Color { col: 0x000000FF };
-                    unsafe { 
-                        let col = blend_color(blue,red, i as f32 / collitions.len() as f32).col;
-                        fb.square(from_cell(node.position.x) ,from_cell(node.position.y), node.size * CELL_SIZE , col);
-                    }
-                }
+                //for (i,node) in collitions.iter().enumerate() {
+                    //let red = Color { col: 0x00FF0000 };
+                    //let blue = Color { col: 0x000000FF };
+                    //unsafe { 
+                        //let col = blend_color(blue,red, i as f32 / collitions.len() as f32).col;
+                        //fb.square(from_cell(node.position.x) ,from_cell(node.position.y), node.size * CELL_SIZE , col);
+                    //}
+                //}
 
             } else {
                 let collition = raycast2(ray_origin,ray_dir,&quadtree);
@@ -159,7 +174,11 @@ fn main() {
             if let Some((mouse_x,mouse_y)) = app.window.get_mouse_pos(MouseMode::Discard) {
                 let grid_x = into_cell(mouse_x).floor() as i32;
                 let grid_y = into_cell(mouse_y).floor() as i32;
-                quadtree.add_block(ivec2!(grid_x,grid_y));
+                let start = Instant::now();
+                for _ in 0..1000 {
+                    quadtree.add_block(ivec2!(grid_x,grid_y));
+                }
+                println!("add block: {:?}",start.elapsed());
             }
         }
         if app.window.get_mouse_down(MouseButton::Right) {
@@ -169,25 +188,24 @@ fn main() {
                 quadtree.remove_block(ivec2!(grid_x ,grid_y ));
             }
         }
-        if app.window.get_mouse_down(MouseButton::Middle) {
-            if let Some((mouse_x,mouse_y)) = app.window.get_mouse_pos(MouseMode::Discard) {
-                let grid_x = into_cell(mouse_x).floor() as i32;
-                let grid_y = into_cell(mouse_y).floor() as i32;
-                //grid[grid_x][grid_y] = false;
-                let mut out = String::new();
-                if quadtree.is_solid_at(ivec2!(grid_x ,grid_y )) {
-                    out += "is solid";
-                } else {
-                    out += "not solid";
-                }
-                println!("{} size {} idx {}",
-                            out,
-                            quadtree.size_at(ivec2!(grid_x as i32,grid_y as i32)),
-                            quadtree.index_at(ivec2!(grid_x as i32,grid_y as i32)),
-                            );
-            }
-        }
-        app.display();
+        //if app.window.get_mouse_down(MouseButton::Middle) {
+            //if let Some((mouse_x,mouse_y)) = app.window.get_mouse_pos(MouseMode::Discard) {
+                //let grid_x = into_cell(mouse_x).floor() as i32;
+                //let grid_y = into_cell(mouse_y).floor() as i32;
+                ////grid[grid_x][grid_y] = false;
+                //let mut out = String::new();
+                //if quadtree.is_solid_at(ivec2!(grid_x ,grid_y )) {
+                    //out += "is solid";
+                //} else {
+                    //out += "not solid";
+                //}
+                //println!("{} size {} idx {}",
+                            //out,
+                            //quadtree.size_at(ivec2!(grid_x as i32,grid_y as i32)),
+                            //quadtree.index_at(ivec2!(grid_x as i32,grid_y as i32)),
+                            //);
+            //}
+        //}
 
         for key in app.window.get_keys() {
             use minifb::Key;
@@ -200,6 +218,7 @@ fn main() {
                 _ => (),
             }
         }
+        app.display();
         clear_screen();
     }
 }
