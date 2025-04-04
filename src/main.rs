@@ -1,8 +1,6 @@
 mod graphics;
 mod quadtree;
-mod quadtree_arr;
 mod raycast;
-mod raycast_arr;
 
 use my_math::prelude::*;
 use minifb::MouseMode;
@@ -12,10 +10,8 @@ extern crate my_math;
 
 use graphics::*;
 
-//use quadtree::*;
-//use raycast::*;
-use quadtree_arr::*;
-use raycast_arr::*;
+use quadtree::*;
+use raycast::*;
 
 use std::time::Instant;
 use std::env;
@@ -52,7 +48,7 @@ fn parse_args() -> (bool,bool) {
                 RES = args[i + 1].parse().unwrap_or_else(|_| {
                     panic!("|| resolution given is not a number ({})||",args[i + 1]); 
                 });
-                println!("res = {}",RES);
+                println!("res = {}",args[i + 1].parse::<i32>().unwrap());
                 i += 2;
             }}
             "-d" => { unsafe {
@@ -98,6 +94,7 @@ fn main() {
     let mut target_y = unsafe { RES as f32/2. - 1e-5 };
 
     'draw_loop: while app.window.is_open() {
+        print!("len {} ",quadtree.nodes.len());
         for (i,node) in quadtree.nodes.iter().enumerate() {
             print!("{} ",if node.is_orphan { 1 } else { 0 });
             if i % 4 == 0 {

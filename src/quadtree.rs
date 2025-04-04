@@ -1,12 +1,15 @@
 use my_math::prelude::*;
 use crate::graphics::Framebuffer;
-use crate::CELL_SIZE;
-use crate::from_cell;
 
+use crate::from_cell;
+use crate::CELL_SIZE;
+
+#[derive(Copy,Clone)]
 pub struct QuadtreeNode {
     pub is_full: bool,
+    pub is_orphan: bool,
 
-    pub children: Option<[Box<QuadtreeNode>;4]>,
+    pub children_indexes: Option<[usize;4]>,
     pub size: i32,
     pub position: IVec2,
 }
@@ -14,175 +17,31 @@ impl QuadtreeNode {
     pub fn new(size: i32,pos: IVec2,full: bool) -> Self {
         QuadtreeNode {
             is_full: full,
+            is_orphan: false,
 
-            children: None,
+            children_indexes: None,
             size: size,
             position: pos,
         }
     }
-    pub fn is_leaf(&self) -> bool {
-        self.children.is_none()
-    }
-    pub fn remove_block(&mut self, pos: IVec2) {
-        if !self.is_full && self.children.is_none() {
-            // isn't full and a leaf => is empty => nothing to do
-            return;
-        }
-        if self.size == 1 {
-            assert!(self.children.is_none());
-            self.is_full = false;
-            return;
-        }
-
-        if self.is_full && self.children.is_none() {
-            // is full and a leaf => devide and call recursively on the proper node
-            self.devide(true);
-
-            let children = self.children.as_mut().unwrap();
-
-            let rel_pos = pos - self.position;
-            if rel_pos.x < self.size/2 && rel_pos.y < self.size/2 {
-                children[0].remove_block(pos); 
-            } else if rel_pos.x < self.size && rel_pos.y < self.size/2 {
-                children[1].remove_block(pos); 
-            } else if rel_pos.x < self.size/2 && rel_pos.y < self.size {
-                children[2].remove_block(pos); 
-            } else {
-                children[3].remove_block(pos); 
-            }
-            self.is_full = false;
-            return;
-        }
-        if let Some(children) = &mut self.children {
-            // is mixed so not full and has children => just call recursively and check if removed
-            // the last child if so merge the four nodes into an empty node
-
-            let rel_pos = pos - self.position;
-            if rel_pos.x < self.size/2 && rel_pos.y < self.size/2 {
-                children[0].remove_block(pos); 
-            } else if rel_pos.x < self.size && rel_pos.y < self.size/2 {
-                children[1].remove_block(pos); 
-            } else if rel_pos.x < self.size/2 && rel_pos.y < self.size {
-                children[2].remove_block(pos); 
-            } else {
-                children[3].remove_block(pos); 
-            }
-            // if any child after removing is full return else merge
-            for child in children {
-                if child.is_full || child.children.is_some() {
-                    return;
-                }
-            }
-            // its already not full so just remove the children and return
-            self.children = None;
-            return;
-        }
-
-    }
-    pub fn add_block(&mut self, pos: IVec2) {
-        if self.is_full {
-            return;
-        }
-        if self.size == 1 {
-            self.is_full = true;
-            return;
-        } 
-        if self.children.is_none() {
-            // is a leaf and not full so its empty => devide and call recursively
-            assert!(self.children.is_none());
-            self.devide(false);
-
-            let children = self.children.as_mut().unwrap();
-
-            let rel_pos = pos - self.position;
-            if rel_pos.x < self.size/2 && rel_pos.y < self.size/2 {
-                children[0].add_block(pos); 
-            } else if rel_pos.x < self.size && rel_pos.y < self.size/2 {
-                children[1].add_block(pos); 
-            } else if rel_pos.x < self.size/2 && rel_pos.y < self.size {
-                children[2].add_block(pos); 
-            } else {
-                children[3].add_block(pos); 
-            }
-            // is empty so one addition cant make it full
-            return;
-        } else {
-            // isn't a leaf and isn't full => dont devide call recursively and check if filled if
-            // so merge
-            let children = self.children.as_mut().unwrap();
-
-            let rel_pos = pos - self.position;
-            if rel_pos.x < self.size/2 && rel_pos.y < self.size/2 {
-                children[0].add_block(pos); 
-            } else if rel_pos.x < self.size && rel_pos.y < self.size/2 {
-                children[1].add_block(pos); 
-            } else if rel_pos.x < self.size/2 && rel_pos.y < self.size {
-                children[2].add_block(pos); 
-            } else {
-                children[3].add_block(pos); 
-            }
-
-            // check if full 
-            for child in children {
-                if !child.is_full {
-                    return;
-                }
-            }
-            self.is_full = true;
-            self.children = None;
-        }
-    }
-    pub fn draw_outline(&self, fb: &mut Framebuffer) {
-
-        if let Some(children) = &self.children {
-            for child in children {
-                child.draw_outline(fb);
-            }
-        } else if self.is_full {
-            unsafe {fb.square(from_cell(self.position.x) ,from_cell(self.position.y), self.size * CELL_SIZE , 0)};
-        }
-        unsafe {fb.empty_square(from_cell(self.position.x) ,from_cell(self.position.y) , self.size * CELL_SIZE , !0)};
-    }
-    pub fn devide(&mut self,full: bool) {
-        //self.is_leaf = false;
-
-        let half_size = self.size /2;
-        let pos = self.position;
-        // + ----- + ----- +
-        // |  q2   |  q3   |
-        // |       |       |
-        // + ----- + ----- +
-        // |  q0   |  q1   |
-        // |       |       |
-        // + ----- + ----- +
-        self.children = Some ([ 
-                // q0
-                Box::new(QuadtreeNode::new(half_size,
-                                    pos, full)),                                       
-                // q1
-                Box::new(QuadtreeNode::new(half_size,
-                                    ivec2!(pos.x + half_size , pos.y ),full)),        
-                // q2
-                Box::new(QuadtreeNode::new(half_size,
-                                    ivec2!(pos.x , pos.y + half_size ),full)),         
-                // q3
-                Box::new(QuadtreeNode::new(half_size,
-                                    ivec2!(pos.x + half_size, pos.y + half_size),full)),  
-            ])
-    }
 }
+
+const ROOT_IDX:usize = 0;
 pub struct Quadtree {
-    pub head: QuadtreeNode
+    pub nodes: Vec<QuadtreeNode>,
 }
 impl Quadtree {
+
     pub fn new(size: i32, pos: IVec2) -> Self {
         let mut s = size ;
         while s != 1 {
             assert!(s % 2 == 0, "the size of the quad tree must be a power of two");
             s /= 2;
         }
+        let mut out = vec![QuadtreeNode::new(size,pos,false)];
+        out.reserve(128);
         Quadtree {
-            head: QuadtreeNode::new(size,pos,false),
+            nodes: out,
         }
     }
     pub fn new_full(size: i32, pos: IVec2) -> Self {
@@ -192,110 +51,215 @@ impl Quadtree {
             s /= 2;
         }
         Quadtree {
-            head: QuadtreeNode::new(size,pos,true),
+            nodes: vec![QuadtreeNode::new(size,pos,true)],
         }
+    }
+    fn devide_node(&mut self,node_idx: usize,full:bool) {
+        let len = self.nodes.len();
+        let node = &self.nodes[node_idx];
+
+        let half_size = node.size /2;
+        let pos = node.position;
+        let nodes = [
+        // q0
+            QuadtreeNode::new(half_size,pos, full),
+        // q1
+            QuadtreeNode::new(half_size,ivec2!(pos.x + half_size , pos.y ),full),
+        // q2
+            QuadtreeNode::new(half_size,ivec2!(pos.x , pos.y + half_size ),full),
+        // q3
+            QuadtreeNode::new(half_size,ivec2!(pos.x + half_size, pos.y + half_size),full),
+        ];
+        let mut idx_arr = [0;4];
+        let mut i = 1;
+        while i < len {
+            if self.nodes[i].is_orphan {
+                for j in 0 .. 4 {
+                    assert!(self.nodes[i + j].is_orphan);
+                    self.nodes[i + j] = nodes[j];
+                    idx_arr[j] = i + j;
+                }
+                self.nodes[node_idx].children_indexes = Some(idx_arr);
+                return;
+            }
+            i += 4;
+        }
+        self.nodes.extend_from_slice(&nodes);
+        self.nodes[node_idx].children_indexes = Some([len,len+1,len+2,len+3]);
+        return;
     }
     pub fn add_block(&mut self,pos: IVec2) {
-        if pos.x < self.head.position.x || pos.x >= self.head.position.x + self.head.size ||
-            pos.y < self.head.position.y || pos.y >= self.head.position.y + self.head.size {
+        let head = &self.nodes[ROOT_IDX];
+        if pos.x < head.position.x || pos.x >= head.position.x + head.size ||
+            pos.y < head.position.y || pos.y >= head.position.y + head.size {
             return;
         }
-        self.head.add_block(pos);
+
+        unsafe { add_block_recursion(self,pos,ROOT_IDX) };
+
+        unsafe fn add_block_recursion(tree: &mut Quadtree,pos: IVec2,node_idx:usize) {
+            // so rust wont complain, makes the code cleaner no need to index into tree.nodes every time
+            let curr_node: &mut QuadtreeNode = &mut *((&mut tree.nodes[node_idx]) as *mut _);
+
+            if curr_node.is_full {
+                return;
+            }
+            if curr_node.size == 1 {
+                curr_node.is_full = true;
+                return;
+            } 
+
+            if curr_node.children_indexes.is_none() {
+                // is a leaf and not full so its empty => devide and call recursively
+                tree.devide_node(node_idx,false); 
+
+                // the data might have moved in memory so update the reference 
+                let curr_node: &mut QuadtreeNode = &mut *((&mut tree.nodes[node_idx]) as *mut _);
+
+                let next_node_idx = pos_to_idx(curr_node,pos);
+
+                // is empty so one addition cant make it full
+                add_block_recursion(tree,pos,next_node_idx);
+
+            } else if let Some(children_idx) = curr_node.children_indexes {
+                // isn't a leaf and isn't full => dont devide call recursively and check if filled if
+                // so merge
+                
+                let next_node_idx = pos_to_idx(curr_node,pos);
+                add_block_recursion(tree,pos,next_node_idx);
+
+                // the data might have moved in memory so update the reference 
+                let curr_node: &mut QuadtreeNode = &mut *((&mut tree.nodes[node_idx]) as *mut _);
+
+                // check if full 
+                for child_idx in children_idx {
+                    if !tree.nodes[child_idx].is_full {
+                        return;
+                    }
+                }
+                for child_idx in children_idx {
+                    tree.nodes[child_idx].is_orphan = true;
+                }
+
+                curr_node.is_full = true;
+                curr_node.children_indexes = None;
+            }
+        }
     }
     pub fn remove_block(&mut self,pos: IVec2) {
-        if pos.x < self.head.position.x || pos.x >= self.head.position.x + self.head.size ||
-            pos.y < self.head.position.y || pos.y >= self.head.position.y + self.head.size {
+        let head = &self.nodes[ROOT_IDX];
+        if pos.x < head.position.x || pos.x >= head.position.x + head.size ||
+            pos.y < head.position.y || pos.y >= head.position.y + head.size {
             return;
         }
-        self.head.remove_block(pos);
+        unsafe { remove_block_recursion(self,pos,ROOT_IDX); }
+
+        unsafe fn remove_block_recursion(tree: &mut Quadtree, pos: IVec2, node_idx: usize) {
+            // so rust wont complain, makes the code cleaner no need to index into tree.nodes every time
+            let curr_node: &mut QuadtreeNode = &mut *((&mut tree.nodes[node_idx]) as *mut _);
+
+            if curr_node.size == 1 {
+                assert!(curr_node.children_indexes.is_none());
+                curr_node.is_full = false;
+                return;
+            }
+
+            if curr_node.children_indexes.is_none() {
+                if !curr_node.is_full {
+                    // isn't full and a leaf => is empty => nothing to do
+                    return;
+                }
+                // is full and a leaf => devide and call recursively on the proper node
+                tree.devide_node(node_idx,true);
+                // the data might have moved in memory so update the reference 
+                let curr_node: &mut QuadtreeNode = &mut *((&mut tree.nodes[node_idx]) as *mut _);
+
+                let next_node_idx = pos_to_idx(curr_node,pos);
+
+                curr_node.is_full = false;
+                remove_block_recursion(tree,pos,next_node_idx);
+
+            } else if let Some(children_idx) = curr_node.children_indexes {
+                // is mixed so not full and has children => just call recursively and check if removed
+                // the last child if so merge the four nodes into an empty node
+
+                let next_node_idx = pos_to_idx(curr_node,pos);
+
+                remove_block_recursion(tree,pos,next_node_idx);
+                // the data might have moved in memory so update the reference 
+                let curr_node: &mut QuadtreeNode = &mut *((&mut tree.nodes[node_idx]) as *mut _);
+
+                // if any child after removing is full return else merge
+                for child_idx in children_idx {
+                    let child = &tree.nodes[child_idx];
+                    if child.is_full || child.children_indexes.is_some() {
+                        return;
+                    }
+                }
+                // its already not full so just remove the children and return
+                for child_idx in children_idx {
+                    tree.nodes[child_idx].is_orphan = true;
+                }
+                curr_node.children_indexes = None;
+            }
+        }
     }
     pub fn is_solid_at(&self,pos: IVec2) -> bool {
-        if pos.x < self.head.position.x || pos.x >= self.head.position.x + self.head.size ||
-            pos.y < self.head.position.y || pos.y >= self.head.position.y + self.head.size {
+        let head = &self.nodes[0];
+        if pos.x < head.position.x || pos.x >= head.position.x + head.size ||
+            pos.y < head.position.y || pos.y >= head.position.y + head.size {
             return false;
         }
-        let mut curr = &self.head;
+        let mut curr = head;
         loop {
             if curr.is_full {
                 return true;
             }
-            if curr.children.is_none() || curr.size == 1 {
+            if curr.children_indexes.is_none() || curr.size == 1 {
                 return false;
             }
 
-            let children = curr.children.as_ref().unwrap();
+            let children = curr.children_indexes.as_ref().unwrap();
             let rel_pos = pos - curr.position;
             if rel_pos.x < curr.size/2 && rel_pos.y < curr.size/2 {
-                curr = &children[0];
+                curr = &self.nodes[children[0]];
             } else if rel_pos.x < curr.size && rel_pos.y < curr.size/2 {
-                curr = &children[1];
+                curr = &self.nodes[children[1]];
             } else if rel_pos.x < curr.size/2 && rel_pos.y < curr.size {
-                curr = &children[2];
+                curr = &self.nodes[children[2]];
             } else {
-                curr = &children[3];
-            }
-        }
-    }
-    pub fn index_at(&self, pos: IVec2) -> i32 {
-        if pos.x < self.head.position.x || pos.x >= self.head.position.x + self.head.size ||
-            pos.y < self.head.position.y || pos.y >= self.head.position.y + self.head.size {
-            return 1;
-        }
-        let mut curr = &self.head;
-        let mut curr_idx = -1;
-        loop {
-            if curr.is_full || curr.children.is_none() {
-                return curr_idx;
-            }
-            if curr.size == 1 {
-                return curr_idx;
-            }
-
-            let children = curr.children.as_ref().unwrap();
-            let rel_pos = pos - curr.position;
-            if rel_pos.x < curr.size/2 && rel_pos.y < curr.size/2 {
-                curr = &children[0];
-                curr_idx = 0;
-            } else if rel_pos.x < curr.size && rel_pos.y < curr.size/2 {
-                curr = &children[1];
-                curr_idx = 1;
-            } else if rel_pos.x < curr.size/2 && rel_pos.y < curr.size {
-                curr = &children[2];
-                curr_idx = 2;
-            } else {
-                curr = &children[3];
-                curr_idx = 3;
-            }
-        }
-    }
-    pub fn size_at(&self, pos: IVec2) -> i32 {
-        if pos.x < self.head.position.x || pos.x >= self.head.position.x + self.head.size ||
-            pos.y < self.head.position.y || pos.y >= self.head.position.y + self.head.size {
-            return 1;
-        }
-        let mut curr = &self.head;
-        loop {
-            if curr.is_full || curr.children.is_none() {
-                return curr.size;
-            }
-            if curr.size == 1 {
-                return 1;
-            }
-
-            let children = curr.children.as_ref().unwrap();
-            let rel_pos = pos - curr.position;
-            if rel_pos.x < curr.size/2 && rel_pos.y < curr.size/2 {
-                curr = &children[0];
-            } else if rel_pos.x < curr.size && rel_pos.y < curr.size/2 {
-                curr = &children[1];
-            } else if rel_pos.x < curr.size/2 && rel_pos.y < curr.size {
-                curr = &children[2];
-            } else {
-                curr = &children[3];
+                curr = &self.nodes[children[3]];
             }
         }
     }
     pub fn draw_outline(&self, fb: &mut Framebuffer) {
-        self.head.draw_outline(fb);
+        draw_outline_recursion(self,fb,ROOT_IDX);
+
+        fn draw_outline_recursion(tree:&Quadtree,fb: &mut Framebuffer,node_idx: usize) {
+            let node = &tree.nodes[node_idx];
+            if let Some(children_idx) = &node.children_indexes {
+                for child_idx in children_idx {
+                    draw_outline_recursion(tree,fb,*child_idx);
+                }
+            } else if node.is_full {
+                unsafe {fb.square(from_cell(node.position.x) ,from_cell(node.position.y), node.size * CELL_SIZE , 0)};
+            }
+            unsafe {fb.empty_square(from_cell(node.position.x) ,from_cell(node.position.y) , node.size * CELL_SIZE , !0)};
+        }
     }
+}
+
+fn pos_to_idx(node: &QuadtreeNode, pos: IVec2 ) -> usize {
+        let children = node.children_indexes.as_ref().unwrap();
+
+        let rel_pos = pos - node.position;
+        if rel_pos.x < node.size/2 && rel_pos.y < node.size/2 {
+            return children[0];
+        } else if rel_pos.x < node.size && rel_pos.y < node.size/2 {
+            return children[1];
+        } else if rel_pos.x < node.size/2 && rel_pos.y < node.size {
+            return children[2];
+        } else {
+            return children[3];
+        }
 }
