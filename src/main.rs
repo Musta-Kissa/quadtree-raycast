@@ -145,7 +145,7 @@ fn main() {
                 for _ in 0..1000 {
                     quadtree.add_block(ivec2!(grid_x,grid_y));
                 }
-                println!("add block: {:?}",start.elapsed());
+                println!("add block: {:?}",start.elapsed()/1000);
             }
         }
         if app.window.get_mouse_down(MouseButton::Right) {
