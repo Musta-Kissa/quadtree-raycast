@@ -20,7 +20,7 @@ const BG_COL: u32 = (51 << 16) + (76 << 8) + 76;
 
 static mut RES: i32 = 720;
 static mut TREE_RES:i32 = unsafe { RES * 9/10 };
-static mut HEIGHT: i32 = 1 << 5;
+static mut HEIGHT: i32 = 1 << 7;
 static mut CELL_SIZE: i32 = unsafe { TREE_RES/HEIGHT };
 
 fn from_cell(pos:i32) -> i32 {
