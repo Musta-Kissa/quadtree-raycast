@@ -38,10 +38,8 @@ impl Quadtree {
             assert!(s % 2 == 0, "the size of the quad tree must be a power of two");
             s /= 2;
         }
-        let mut out = vec![QuadtreeNode::new(size,pos,false)];
-        out.reserve(128);
         Quadtree {
-            nodes: out,
+            nodes: vec![QuadtreeNode::new(size,pos,false)],
         }
     }
     pub fn new_full(size: i32, pos: IVec2) -> Self {

@@ -83,6 +83,7 @@ fn main() {
     } else {
         quadtree = unsafe { Quadtree::new(HEIGHT,ivec2!(0,0)) };
     }
+    //quadtree.nodes.reserve_exact(129);
 
     let mut app = unsafe { App::new("raycast", RES, RES) };
     let mut target_x = unsafe { RES as f32/2. + 1e-5 };
@@ -109,13 +110,13 @@ fn main() {
             for _ in 0..1000 {
                 dda_quad(ray_origin,ray_dir,1000.,&quadtree);
             }
-            println!("dda   {:?}",start.elapsed());
+            println!("dda   {:?}",start.elapsed().as_nanos() / 1000);
 
             let start = Instant::now();
             for _ in 0..1000 {
                 raycast2(ray_origin,ray_dir,&quadtree);
             }
-            println!("param {:?}",start.elapsed());
+            println!("param {:?}",start.elapsed().as_nanos() / 1000);
 
 
             let collition = raycast2(ray_origin,ray_dir,&quadtree);
@@ -167,15 +168,14 @@ fn main() {
                 _ => (),
             }
         }
-        print!("len {} ",quadtree.nodes.len());
-        for (i,node) in quadtree.nodes.iter().enumerate() {
-            print!("{} ",if node.is_orphan { 1 } else { 0 });
-            if i % 4 == 0 {
-                print!("|");
-            }
-            if i % unsafe {HEIGHT} as usize == 0 {
+        println!("len {} cap {}",quadtree.nodes.len(),quadtree.nodes.capacity());
+        let mut i = 1;
+        while i < quadtree.nodes.len() {
+            print!("{}|",if !quadtree.nodes[i].is_orphan { "■" } else { "▢" });
+            if (i - 1 ) % unsafe {HEIGHT} as usize == 0 {
                 println!();
             }
+            i += 4;
         }
         println!();
 
